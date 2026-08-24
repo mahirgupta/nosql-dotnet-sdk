@@ -487,6 +487,27 @@ namespace Oracle.NoSQL.SDK.Tests
             await VerifyUnionAllContinuationAsync(true);
         }
 
+        [TestMethod]
+        public async Task TestUnionAllCaseExpressionAsync()
+        {
+            CheckOnPrem();
+            var source = $"SELECT colInteger FROM {Fixture.Table.Name}";
+            var sql = "SELECT CASE WHEN $u.colInteger > 10 THEN " +
+                "$u.colInteger ELSE 0 END AS value FROM (" + source +
+                " UNION ALL " + source + ") $u";
+            var statement = await client.PrepareAsync(sql);
+            var rows = new List<RecordValue>();
+
+            await foreach (var result in client.GetQueryAsyncEnumerable(
+                statement))
+            {
+                rows.AddRange(result.Rows);
+            }
+
+            Assert.AreEqual(Fixture.Rows.Count() * 2, rows.Count);
+            Assert.IsTrue(rows.All(row => row["value"].IsNumeric));
+        }
+
         private static async Task VerifyUnionAllContinuationAsync(
             bool sorted)
         {

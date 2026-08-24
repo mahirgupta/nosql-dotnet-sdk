@@ -990,6 +990,29 @@ namespace Oracle.NoSQL.SDK.Tests
         }
 
         [TestMethod]
+        public void TestPlanFormatterUsesJavaUnionBranchesAndSortSpecs()
+        {
+            var plan = Query.PlanFormatter.Format(new Query.UnionStep
+            {
+                ResultPosition = 4,
+                BranchSteps = new Query.PlanStep[]
+                {
+                    new Query.ReceiveStep { ResultPosition = 1 },
+                    new Query.ReceiveStep { ResultPosition = 2 }
+                },
+                SortSpecs = new[]
+                {
+                    new Query.SortSpec("id", true, false)
+                }
+            });
+
+            StringAssert.Contains(plan, "\"branches\" : [");
+            StringAssert.Contains(plan, "\"order by fields\" : [ id ]");
+            StringAssert.Contains(plan,
+                "\"sort specs\" : [ { \"desc\" : true, \"nulls_first\" : false } ]");
+        }
+
+        [TestMethod]
         public void TestDeferredLogicalQueryIsObservedOnceAfterPreflight()
         {
             using var client = new NoSQLClient(new NoSQLConfig

@@ -257,6 +257,34 @@ namespace Oracle.NoSQL.SDK.Query
         {
         }
 
+        // The proxy always sends array_collect_distinct partial results as
+        // arrays. Unlike ordinary array_collect, this is independent of the
+        // regrouping flag (matching GroupIter in the Java driver).
+        internal override long Aggregate(FieldValue value, bool countMemory)
+        {
+            if (value == FieldValue.Null || value == FieldValue.Empty)
+            {
+                return 0;
+            }
+
+            if (!(value is ArrayValue array))
+            {
+                throw new InvalidOperationException(
+                    "Query: input value for array_collect_distinct is not an ArrayValue");
+            }
+
+            long memory = 0;
+            foreach (var element in array)
+            {
+                AddValue(element);
+                if (countMemory)
+                {
+                    memory += GetMemorySize(element.GetMemorySize());
+                }
+            }
+            return memory;
+        }
+
         internal override FieldValue Result
         {
             get

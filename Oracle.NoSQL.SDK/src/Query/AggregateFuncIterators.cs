@@ -102,8 +102,8 @@ namespace Oracle.NoSQL.SDK.Query {
             this.step = step;
             Aggregator = step.IsDistinct
                 ? (ValueAggregator)new CollectDistinctAggregator(
-                    runtime.IsForTest, false)
-                : new CollectAggregator(runtime.IsForTest, false);
+                    runtime.IsForTest, true)
+                : new CollectAggregator(runtime.IsForTest, true);
         }
 
         internal override PlanStep Step => step;

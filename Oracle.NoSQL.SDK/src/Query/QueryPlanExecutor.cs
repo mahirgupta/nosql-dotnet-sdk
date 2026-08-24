@@ -36,6 +36,12 @@ namespace Oracle.NoSQL.SDK.Query {
 
         internal TopologyInfo BaseTopology { get; }
 
+        private readonly TopologyInfo[] branchTopologies;
+
+        // Set while UnionIterator constructs a branch. ReceiveIterator uses
+        // this frozen snapshot rather than looking up a mutable client cache.
+        internal int ConstructionUnionBranch { get; set; } = -1;
+
         internal long MaxMemory { get; set; }
 
         // Used only for error reporting
@@ -103,7 +109,22 @@ namespace Oracle.NoSQL.SDK.Query {
             }
 
             BaseTopology = client.QueryTopology;
+            if (preparedStatement.QueryBranches.Count > 1)
+            {
+                branchTopologies = new TopologyInfo[
+                    preparedStatement.QueryBranches.Count];
+                for (var i = 0; i < branchTopologies.Length; i++)
+                {
+                    branchTopologies[i] = client.GetQueryTopology(
+                        preparedStatement.GetStoreName(i));
+                }
+            }
         }
+
+        internal TopologyInfo GetConstructionTopology() =>
+            ConstructionUnionBranch >= 0 && branchTopologies != null
+                ? branchTopologies[ConstructionUnionBranch]
+                : BaseTopology;
 
         private void InitExternalVariables()
         {

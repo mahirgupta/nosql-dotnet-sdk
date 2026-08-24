@@ -14,12 +14,16 @@ namespace Oracle.NoSQL.SDK
 
     internal class TopologyInfo
     {
+        internal string StoreName { get; }
+
         internal int SequenceNumber { get; }
 
         internal IReadOnlyList<int> ShardIds { get; }
 
-        internal TopologyInfo(int sequenceNumber, IReadOnlyList<int> shardIds)
+        internal TopologyInfo(int sequenceNumber, IReadOnlyList<int> shardIds,
+            string storeName = null)
         {
+            StoreName = storeName;
             SequenceNumber = sequenceNumber;
             ShardIds = shardIds;
         }
@@ -314,6 +318,8 @@ namespace Oracle.NoSQL.SDK
             internal string Namespace { get; set; }
 
             internal string TableName { get; set; }
+
+            internal string StoreName { get; set; }
         }
 
         private readonly List<QueryBranch> queryBranches =
@@ -338,6 +344,27 @@ namespace Oracle.NoSQL.SDK
         internal string GetTableName(int branch) =>
             branch >= 0 && branch < queryBranches.Count ?
                 queryBranches[branch].TableName : null;
+
+        internal string GetStoreName(int branch) =>
+            branch >= 0 && branch < queryBranches.Count ?
+                queryBranches[branch].StoreName : null;
+
+        internal void SetQueryBranchStores(IReadOnlyList<string> storeNames)
+        {
+            if (storeNames == null)
+            {
+                return;
+            }
+            if (storeNames.Count != queryBranches.Count)
+            {
+                throw new BadProtocolException(
+                    "Query: number of branch store names does not match the number of query branches");
+            }
+            for (var i = 0; i < storeNames.Count; i++)
+            {
+                queryBranches[i].StoreName = storeNames[i];
+            }
+        }
 
         internal void AddQueryBranch(QueryBranch branch)
         {

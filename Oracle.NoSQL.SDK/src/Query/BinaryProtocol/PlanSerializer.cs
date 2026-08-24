@@ -25,14 +25,20 @@ namespace Oracle.NoSQL.SDK.Query.BinaryProtocol
             Const = 0,
             VarRef = 1,
             ExternalVarRef = 2,
+            ArrayConstructor = 3,
+            ValueCompare = 5,
+            AndOr = 7,
             FieldStep = 11,
             ArithOp = 8,
             FnSize = 15,
+            Case = 19,
+            IsNull = 26,
             FnSum = 39,
             FnMinMax = 41,
             Group = 65,
             Sort2 = 66,
             FnCollect = 78,
+            SeqAggr = 48,
             Union = 90
         }
 
@@ -98,6 +104,19 @@ namespace Oracle.NoSQL.SDK.Query.BinaryProtocol
             }
 
             return (SQLFuncCode)val;
+        }
+
+        private static QueryFuncCode DeserializeQueryFuncCode(
+            MemoryStream stream, PlanStep parent)
+        {
+            var value = ReadUnpackedInt16(stream);
+            if (!Enum.IsDefined(typeof(QueryFuncCode), (int)value))
+            {
+                throw new BadProtocolException(
+                    $"Query plan: received invalid function code: {value} " +
+                    $"in {parent.Name} step");
+            }
+            return (QueryFuncCode)value;
         }
 
         private static SortStep DeserializeSortStep(MemoryStream stream,
@@ -295,6 +314,74 @@ namespace Oracle.NoSQL.SDK.Query.BinaryProtocol
             return step;
         }
 
+        private static ArrayConstructorStep DeserializeArrayConstructorStep(
+            MemoryStream stream, short queryVersion)
+        {
+            var step = new ArrayConstructorStep();
+            DeserializeBase(stream, step);
+            step.IsConditional = ReadBoolean(stream);
+            step.ArgSteps = DeserializeMultipleSteps(stream, queryVersion);
+            ValidateArrayConstructorStep(step);
+            return step;
+        }
+
+        private static ValueCompareStep DeserializeValueCompareStep(
+            MemoryStream stream, short queryVersion)
+        {
+            var step = new ValueCompareStep();
+            DeserializeBase(stream, step);
+            step.FuncCode = DeserializeQueryFuncCode(stream, step);
+            step.LeftStep = DeserializeStep(stream, queryVersion);
+            step.RightStep = DeserializeStep(stream, queryVersion);
+            ValidateValueCompareStep(step);
+            return step;
+        }
+
+        private static AndOrStep DeserializeAndOrStep(MemoryStream stream,
+            short queryVersion)
+        {
+            var step = new AndOrStep();
+            DeserializeBase(stream, step);
+            step.FuncCode = DeserializeQueryFuncCode(stream, step);
+            step.ArgSteps = DeserializeMultipleSteps(stream, queryVersion);
+            ValidateAndOrStep(step);
+            return step;
+        }
+
+        private static CaseStep DeserializeCaseStep(MemoryStream stream,
+            short queryVersion)
+        {
+            var step = new CaseStep();
+            DeserializeBase(stream, step);
+            step.ConditionSteps = DeserializeMultipleSteps(stream, queryVersion);
+            step.ThenSteps = DeserializeMultipleSteps(stream, queryVersion);
+            step.ElseStep = DeserializeStep(stream, queryVersion);
+            ValidateCaseStep(step);
+            return step;
+        }
+
+        private static IsNullStep DeserializeIsNullStep(MemoryStream stream,
+            short queryVersion)
+        {
+            var step = new IsNullStep();
+            DeserializeBase(stream, step);
+            step.FuncCode = DeserializeQueryFuncCode(stream, step);
+            step.InputStep = DeserializeStep(stream, queryVersion);
+            ValidateIsNullStep(step);
+            return step;
+        }
+
+        private static SeqAggregateStep DeserializeSeqAggregateStep(
+            MemoryStream stream, short queryVersion)
+        {
+            var step = new SeqAggregateStep();
+            DeserializeBase(stream, step);
+            step.FuncCode = DeserializeQueryFuncCode(stream, step);
+            step.InputStep = DeserializeStep(stream, queryVersion);
+            ValidateSeqAggregateStep(step);
+            return step;
+        }
+
         private static PlanStep[] DeserializeMultipleSteps(MemoryStream stream,
             short queryVersion)
         {
@@ -321,6 +408,12 @@ namespace Oracle.NoSQL.SDK.Query.BinaryProtocol
                     return DeserializeVarRefStep(stream);
                 case StepType.ExternalVarRef:
                     return DeserializeExtVarRefStep(stream);
+                case StepType.ArrayConstructor:
+                    return DeserializeArrayConstructorStep(stream, queryVersion);
+                case StepType.ValueCompare:
+                    return DeserializeValueCompareStep(stream, queryVersion);
+                case StepType.AndOr:
+                    return DeserializeAndOrStep(stream, queryVersion);
                 case StepType.FieldStep:
                     return DeserializeFieldStep(stream, queryVersion);
                 case StepType.ArithOp:
@@ -331,12 +424,18 @@ namespace Oracle.NoSQL.SDK.Query.BinaryProtocol
                     return DeserializeFuncMinMaxStep(stream, queryVersion);
                 case StepType.FnSize:
                     return DeserializeFuncSizeStep(stream, queryVersion);
+                case StepType.Case:
+                    return DeserializeCaseStep(stream, queryVersion);
+                case StepType.IsNull:
+                    return DeserializeIsNullStep(stream, queryVersion);
                 case StepType.FnCollect:
                     return DeserializeFuncCollectStep(stream, queryVersion);
                 case StepType.Group:
                     return DeserializeGroupStep(stream, queryVersion);
                 case StepType.Union:
                     return DeserializeUnionStep(stream, queryVersion);
+                case StepType.SeqAggr:
+                    return DeserializeSeqAggregateStep(stream, queryVersion);
                 default:
                     throw new BadProtocolException(
                         "Query plan: received invalid or unsupported step " +

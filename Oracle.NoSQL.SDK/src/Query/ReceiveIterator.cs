@@ -45,7 +45,7 @@ namespace Oracle.NoSQL.SDK.Query {
                     QueryLabel = runtime.Request.Options?.QueryLabel
                 })
             {
-                BaseTopology = runtime.BaseTopology,
+                BaseTopology = runtime.GetConstructionTopology(),
                 IsInternal = true
             };
 
@@ -58,7 +58,7 @@ namespace Oracle.NoSQL.SDK.Query {
             {
                 if (step.DistributionKind == DistributionKind.AllShards)
                 {
-                    var topologyInfo = runtime.BaseTopology;
+                    var topologyInfo = queryRequest.BaseTopology;
                     
                     if (topologyInfo == null)
                     {
@@ -115,6 +115,16 @@ namespace Oracle.NoSQL.SDK.Query {
             queryRequest.UnionBranch = runtime.UnionBranch;
             queryRequest.StatsLogicalQueryRequest = runtime.Request;
 
+            if (queryRequest.Options.TraceLevel.HasValue)
+            {
+                // Internal UNION branch requests belong to one logical query,
+                // so the trace counter must advance globally, not per branch.
+                // NSON converts this zero-based value to Java's one-based
+                // batch counter when it writes the request.
+                queryRequest.Options.BatchNumber =
+                    runtime.Request.Options.BatchNumber++;
+            }
+
             var result = (QueryResult<RecordValue>)
                 await runtime.Client.ExecuteValidatedRequestAsync(
                     queryRequest, cancellationToken);
@@ -145,7 +155,6 @@ namespace Oracle.NoSQL.SDK.Query {
             if (result.QueryTraces != null)
             {
                 runtime.AddServerQueryTraces(result.QueryTraces);
-                queryRequest.Options.BatchNumber++;
             }
 
             return result;
@@ -337,7 +346,7 @@ namespace Oracle.NoSQL.SDK.Query {
         {
             if (currVScanId == -1)
             {
-                var topologyInfo = runtime.BaseTopology;
+                var topologyInfo = queryRequest.BaseTopology;
                 Debug.Assert(topologyInfo?.ShardIds?.Count != 0);
                 // ShardIds are sorted.
                 currVScanId = topologyInfo!.ShardIds![^1] + 1;
