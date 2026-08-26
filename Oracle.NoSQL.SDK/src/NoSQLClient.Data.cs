@@ -21,7 +21,9 @@ namespace Oracle.NoSQL.SDK {
         /// <see cref="GetResult{TRow}.Row"/> property. If matching row
         /// does not exist, the operation is still successful and
         /// <see cref="GetResult{TRow}.Row"/> property will be set to
-        /// <c>null</c>.
+        /// <c>null</c>.  If the row exists and the service provides it, its
+        /// system-generated creation time is available through
+        /// <see cref="GetResult{TRow}.CreationTime"/>.
         /// </remarks>
         /// <example>
         /// Executing Get operation on table with schema MyTable(id LONG,

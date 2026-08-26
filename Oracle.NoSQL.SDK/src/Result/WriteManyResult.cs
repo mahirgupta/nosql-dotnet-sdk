@@ -27,6 +27,11 @@ namespace Oracle.NoSQL.SDK
     /// <see cref="WriteOperationResult{TRow}"/>.
     /// </para>
     /// <para>
+    /// For a Put or Delete sub operation configured to return an existing
+    /// row, its result may also include the server-generated creation time in
+    /// <see cref="WriteOperationResult{TRow}.ExistingCreationTime"/>.
+    /// </para>
+    /// <para>
     /// If the operation is aborted because of the failure of a Put or Delete
     /// sub operation that has
     /// <see cref="IWriteOperation.AbortIfUnsuccessful"/> set to <c>true</c>
