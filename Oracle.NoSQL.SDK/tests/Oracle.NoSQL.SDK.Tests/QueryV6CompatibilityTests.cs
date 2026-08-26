@@ -12,6 +12,8 @@ namespace Oracle.NoSQL.SDK.Tests
     using Microsoft.VisualStudio.TestTools.UnitTesting;
     using Oracle.NoSQL.SDK.Query;
     using BinaryProtocol = Oracle.NoSQL.SDK.BinaryProtocol.Protocol;
+    using NsonProtocol = Oracle.NoSQL.SDK.NsonProtocol.Protocol;
+    using Opcode = Oracle.NoSQL.SDK.BinaryProtocol.Opcode;
     using PlanSerializer = Oracle.NoSQL.SDK.Query.BinaryProtocol.PlanSerializer;
 
     [TestClass]
@@ -53,7 +55,7 @@ namespace Oracle.NoSQL.SDK.Tests
         }
 
         [TestMethod]
-        public void TestUnionBranchNamespaceOverridesQueryOptions()
+        public void TestPreparedQueryNamespacePrecedence()
         {
             var statement = new PreparedStatement();
             statement.AddQueryBranch(new PreparedStatement.QueryBranch
@@ -80,9 +82,22 @@ namespace Oracle.NoSQL.SDK.Tests
                 });
 
             request.UnionBranch = 0;
-            Assert.AreEqual("firstNamespace", request.Namespace);
+            Assert.AreEqual("optionsNamespace", request.Namespace);
             request.UnionBranch = 1;
-            Assert.AreEqual("secondNamespace", request.Namespace);
+            Assert.AreEqual("optionsNamespace", request.Namespace);
+
+            request.Options = null;
+            Assert.AreEqual("configNamespace", request.Namespace);
+
+            using var noDefaultClient = new NoSQLClient(new NoSQLConfig
+            {
+                ServiceType = ServiceType.CloudSim,
+                Endpoint = "http://localhost:8080"
+            });
+            var branchRequest = new QueryRequest<RecordValue>(
+                noDefaultClient, statement, null);
+            branchRequest.UnionBranch = 1;
+            Assert.AreEqual("secondNamespace", branchRequest.Namespace);
         }
 
         [TestMethod]
@@ -130,6 +145,27 @@ namespace Oracle.NoSQL.SDK.Tests
             Assert.AreEqual(2, distinct.Result.AsArrayValue.Count);
             Assert.AreEqual(1, distinct.Result.AsArrayValue[0].AsInt32);
             Assert.AreEqual(2, distinct.Result.AsArrayValue[1].AsInt32);
+        }
+
+        [TestMethod]
+        public void TestPreV6GroupPlanDefaultsToRegrouping()
+        {
+            using var stream = new MemoryStream();
+            BinaryProtocol.WriteByte(stream, 65); // GROUP
+            WriteBase(stream);
+            WriteIntegerConstStep(stream);
+            BinaryProtocol.WriteUnpackedInt32(stream, 0);
+            WriteStringArray(stream, "values");
+            BinaryProtocol.WriteUnpackedInt16(stream,
+                (short)SQLFuncCode.ArrayCollect);
+            BinaryProtocol.WriteBoolean(stream, false);
+            BinaryProtocol.WriteBoolean(stream, false);
+            BinaryProtocol.WriteBoolean(stream, false);
+            stream.Position = 0;
+
+            var step = (GroupStep)PlanSerializer.DeserializeStep(stream,
+                QueryRequestBase.QueryV5);
+            Assert.IsTrue(step.IsRegrouping);
         }
 
         [TestMethod]
@@ -360,6 +396,54 @@ namespace Oracle.NoSQL.SDK.Tests
             Assert.AreEqual(4, runtime.GetConstructionTopology().SequenceNumber);
             runtime.ConstructionUnionBranch = 1;
             Assert.AreEqual(7, runtime.GetConstructionTopology().SequenceNumber);
+
+            client.SetQueryTopology(new TopologyInfo(8, new[] { 4 },
+                "storeOne"));
+            client.SetQueryTopology(new TopologyInfo(10, new[] { 5, 6 },
+                "storeTwo"));
+
+            Assert.AreEqual(4, runtime.StoreTopologies[0].SequenceNumber);
+            Assert.AreEqual(7, runtime.StoreTopologies[1].SequenceNumber);
+
+            var request = new QueryRequest<RecordValue>(client, statement,
+                null)
+            {
+                StoreTopologySnapshot = runtime.StoreTopologies
+            };
+            using var stream = new MemoryStream();
+            var writer = NsonProtocol.GetNsonWriter(stream);
+            writer.StartMap();
+            NsonProtocol.WriteHeader(writer, Opcode.Query, request);
+            writer.EndMap();
+            stream.Position = 0;
+            var reader = NsonProtocol.GetNsonReader(stream);
+            reader.Next();
+            var root = NsonProtocol.ReadFieldValue(reader).AsMapValue;
+            var header = root[NsonProtocol.FieldNames.Header].AsMapValue;
+            var storeTopologies = header[NsonProtocol.FieldNames
+                .StoreTopologySequenceNumbers].AsArrayValue;
+            Assert.AreEqual(4, GetTopologySequence(storeTopologies,
+                "storeOne"));
+            Assert.AreEqual(7, GetTopologySequence(storeTopologies,
+                "storeTwo"));
+        }
+
+        private static int GetTopologySequence(ArrayValue storeTopologies,
+            string storeName)
+        {
+            foreach (var fieldValue in storeTopologies)
+            {
+                var topology = fieldValue.AsMapValue;
+                if (topology[NsonProtocol.FieldNames.StoreId].AsString ==
+                    storeName)
+                {
+                    return topology[NsonProtocol.FieldNames.TopoSeqNum]
+                        .AsInt32;
+                }
+            }
+
+            throw new AssertFailedException(
+                "Missing topology for store " + storeName);
         }
 
         private static ConstStep IntegerConstant(int position, int value) =>
@@ -388,6 +472,16 @@ namespace Oracle.NoSQL.SDK.Tests
             for (var i = 0; i < count; i++)
             {
                 writeStep(stream);
+            }
+        }
+
+        private static void WriteStringArray(MemoryStream stream,
+            params string[] values)
+        {
+            BinaryProtocol.WritePackedInt32(stream, values.Length);
+            foreach (var value in values)
+            {
+                BinaryProtocol.WriteString(stream, value);
             }
         }
 

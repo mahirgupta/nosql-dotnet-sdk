@@ -8,6 +8,7 @@
 namespace Oracle.NoSQL.SDK
 {
     using System;
+    using System.Collections.Generic;
     using System.Diagnostics;
     using System.IO;
     using System.Threading;
@@ -68,6 +69,13 @@ namespace Oracle.NoSQL.SDK
 
         internal TopologyInfo BaseTopology { get; set; }
 
+        // Advanced query execution captures topology snapshots when its
+        // runtime is created. Internal fetches must advertise that same view.
+        internal IReadOnlyList<TopologyInfo> StoreTopologySnapshot { get; set; }
+
+        internal override IReadOnlyList<TopologyInfo> StoreTopologies =>
+            StoreTopologySnapshot ?? base.StoreTopologies;
+
         internal VirtualScan VirtualScan { get; set; }
 
         internal bool IsInternal { get; set; }
@@ -120,12 +128,10 @@ namespace Oracle.NoSQL.SDK
         internal override string InternalTableName =>
             PreparedStatement?.GetTableName(UnionBranch);
 
-        // A V6 UNION plan has one proxy statement per branch. The proxy must
-        // receive the namespace paired with the selected branch, matching the
-        // Java driver's QueryRequest.getNamespace() behavior.
-        internal override string Namespace => PreparedStatement != null
-            ? PreparedStatement.GetNamespace(UnionBranch)
-            : base.Namespace;
+        // An explicit request or configured namespace takes precedence. If
+        // neither is present, a V6 UNION request uses its branch namespace.
+        internal override string Namespace => base.Namespace ??
+            PreparedStatement?.GetNamespace(UnionBranch);
 
         internal QueryContinuationKey ContinuationKey =>
             Options?.ContinuationKey;

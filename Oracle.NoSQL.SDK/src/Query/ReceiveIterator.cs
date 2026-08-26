@@ -35,6 +35,7 @@ namespace Oracle.NoSQL.SDK.Query {
                 new QueryOptions
                 {
                     Compartment = runtime.Request.Options?.Compartment,
+                    Namespace = runtime.Request.Options?.Namespace,
                     Timeout = runtime.Request.Options?.Timeout,
                     Consistency = runtime.Request.Options?.Consistency,
                     LastWriteMetadata =
@@ -46,6 +47,7 @@ namespace Oracle.NoSQL.SDK.Query {
                 })
             {
                 BaseTopology = runtime.GetConstructionTopology(),
+                StoreTopologySnapshot = runtime.StoreTopologies,
                 IsInternal = true
             };
 

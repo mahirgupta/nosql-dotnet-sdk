@@ -36,6 +36,8 @@ namespace Oracle.NoSQL.SDK.Query {
 
         internal TopologyInfo BaseTopology { get; }
 
+        internal IReadOnlyList<TopologyInfo> StoreTopologies { get; }
+
         private readonly TopologyInfo[] branchTopologies;
 
         // Set while UnionIterator constructs a branch. ReceiveIterator uses
@@ -109,6 +111,7 @@ namespace Oracle.NoSQL.SDK.Query {
             }
 
             BaseTopology = client.QueryTopology;
+            StoreTopologies = client.StoreTopologies;
             if (preparedStatement.QueryBranches.Count > 1)
             {
                 branchTopologies = new TopologyInfo[

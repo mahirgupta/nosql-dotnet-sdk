@@ -297,7 +297,9 @@ namespace Oracle.NoSQL.SDK.Query.BinaryProtocol
             step.IsDistinct = ReadBoolean(stream);
             step.RemoveResult = ReadBoolean(stream);
             step.CountMemory = ReadBoolean(stream);
-            step.IsRegrouping = queryVersion >= QueryRequestBase.QueryV6 &&
+            // Before V6 the regrouping flag was not sent. Preserve the
+            // existing C# behavior for those proxy partial array results.
+            step.IsRegrouping = queryVersion < QueryRequestBase.QueryV6 ||
                 ReadBoolean(stream);
             ValidateGroupStep(step);
             return step;
