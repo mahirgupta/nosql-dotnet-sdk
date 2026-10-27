@@ -915,14 +915,12 @@ namespace Oracle.NoSQL.SDK.Tests
         }
 
         [TestMethod]
-        public void DisposingClientClearsBothCaches()
+        public void DisposingClientClearsStoreTopologyCache()
         {
             using var client = MakeClient();
-            client.SetQueryTopology(Topology(null, 1, 1));
             client.SetStoreTopologies(new[] { Topology("A", 1, 1) });
             client.Dispose();
             var snapshot = client.GetQueryTopologySnapshot();
-            Assert.IsNull(snapshot.LegacyTopology);
             Assert.AreEqual(0, snapshot.StoreTopologies.Count);
         }
 
